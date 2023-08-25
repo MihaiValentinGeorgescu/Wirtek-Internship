@@ -1,0 +1,114 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+trigger:
+- main
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+- stage: Build_image_test_and_push
+  jobs:
+  - job: Build_image_and_run
+    steps:
+    - task: Bash@3
+      displayName: 'build image'
+      inputs:
+        targetType: 'inline'
+        script: |
+          docker build -t mihaiv.azurecr.io/react-task-app-alpinev3 .
+
+    - task: Bash@3
+      displayName: 'start container'
+      inputs:
+        targetType: 'inline'
+        script: |
+          docker run -dp 3000:3000 mihaiv.azurecr.io/react-task-app-alpinev3
+
+    - task: Bash@3
+      displayName: Smoke_test
+      inputs:
+        targetType: 'inline'
+        script: |
+          wget localhost:3000
+          TEST_RESULT=$?
+
+    - task: AzureCLI@2
+      displayName: 'push image'
+      inputs:
+        azureSubscription: ' Azure subscription 1(23aa544a-49f9-4e24-9e8e-8e3c663e6af3)'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          if [ "${TEST_RESULT}" == 1 ]
+          then
+            az acr login -n mihaiv
+            docker push mihaiv.azurecr.io/react-task-app-alpinev3:latest
+          fi
+
+    - task: CopyFiles@2
+      inputs:
+        Contents: 'deploymentRemake.yaml'
+        TargetFolder: '$(build.artifactstagingdirectory)'
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'drop'
+        publishLocation: 'Container'
+
+  - job: Deploy_to_AKS
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Get AKS credentials'
+      inputs:
+        azureSubscription: 'Azure subscription 1(1)(23aa544a-49f9-4e24-9e8e-8e3c663e6af3)'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az aks get-credentials --resource-group aks_tf_rg  --name my-aks-cluster
+
+    - task: Bash@3
+      displayName: 'Apply deploymentRemake.yaml'
+      inputs:
+        targetType: 'inline'
+        script: |
+          kubectl apply -n mihaiv -f deploymentRemake.yaml
+#- job: Publish_image
+#  steps:
+#  - task: Docker@2
+#    displayName: Build and push an image to container registry
+#    inputs:
+#      command: push
+#      repository: $(registryname)
+#      containerRegistry: mihaiv.azurecr.io
+#      tags: |
+#        weatherapp
+
+  # - task: AzureCLI@2
+  #   displayName: Azure CLI
+  #   inputs:
+  #     azureSubscription: ACR /de facut
+  #     scriptType: bash
+  #     scriptLocation: inlineScript
+  #     inlineScript: |
+  #       az --version
+  #       az account show
+
+#       TOKEN=$(az acr login --name mihaiv --expose-token --output tsv --query accessToken)
+#       docker login mihaiv.azurecr.io --username 00000000-0000-0000-0000-000000000000 --password-stdin <<< $TOKEN
+#       docker tag $(image-name) mihaiv.azurecr.io/images/weatherapp:latest
+#       docker images
+#       docker ps
+#       docker push wirtekregistry.azurecr.io/images/weatherapp
+
+#  - script:
+#       docker login mihaiv.azurecr.io
+#       docker tag $(image-name) mihaiv.azurecr.io/images/weatherapp
+#     displayName: 'Login and push into registry'
+
+#  - script:
+#       docker login -u mihaiv -p $(docker-hub-secret)
+#       docker push  mihaiv/weatherapp:latest
+#   displayName: 'Docker login and push'

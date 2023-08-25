@@ -1,0 +1,44 @@
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mihai
+
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: react-task-app-alpinev3-deployment
+  namespace: mihai
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: react-task-app-alpinev3
+  template:
+    metadata:
+      labels:
+        app: react-task-app-alpinev3
+    spec:
+      containers:
+        - name: react-task-app-alpinev3
+          image: mihaivalentingeorgescu/react-task-app-alpinev3:latest
+          ports:
+            - containerPort: 3000
+---
+# Service (LoadBalancer)
+apiVersion: v1
+kind: Service
+metadata:
+  name: react-task-app-alpinev3-service
+  namespace: mihai
+spec:
+  selector:
+    app: react-task-app-alpinev3
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+  type: LoadBalancer
+
+# Proxy using your application container
